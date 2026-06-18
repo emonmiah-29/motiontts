@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motion TTS - Parallel Processing & Smart Fallback</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Hind+Siliguri:wght@400;600&display=swap');
+        body { font-family: 'Inter', 'Hind Siliguri', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .api-box {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border: 2px dashed #6366f1;
+            border-radius: 1.5rem;
+        }
+
+        .config-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 1rem;
+        }
+
+        .settings-card {
+            background: #ffffff;
+            border: 1px solid #f1f5f9;
+            border-radius: 1.25rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        
+        .brand-gradient {
+            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .console-log {
+            font-family: monospace;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+    <div id="app" class="max-w-6xl mx-auto p-4 md:p-6 space-y-6">
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row items-center justify-between bg-white p-6 rounded-2xl shadow-sm border border-slate-100 gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-indigo-600 p-3 rounded-xl text-white shadow-lg shadow-indigo-200">
+                    <i data-lucide="zap"></i>
+                </div>
+                <div>
+                    <h1 class="text-2xl font-black tracking-tighter brand-gradient">Motion TTS</h1>
+                    <p class="text-xs text-slate-500 font-bold uppercase tracking-widest">Parallel Processing Studio</p>
+                </div>
+            </div>
+            
+            <div id="header-actions" class="flex items-center space-x-6 hidden">
+                <div class="flex items-center space-x-4 border-r border-slate-200 pr-6">
+                    <div class="text-right">
+                        <div class="text-sm font-semibold text-slate-700">অগ্রগতি</div>
+                        <div id="progress-text" class="text-xs text-slate-500">0% সম্পন্ন</div>
+                    </div>
+                    <div class="w-32 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div id="progress-bar" class="h-full bg-indigo-500 transition-all duration-300 w-0"></div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Left Column: Setup -->
+            <div class="lg:col-span-4 space-y-6">
+                
+                <!-- Persistence Setting Box -->
+                <div class="settings-card p-5 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="database" class="w-5 h-5 text-indigo-500"></i>
+                            <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider">অটো-সেভ সেটিংস</h2>
+                        </div>
+                    </div>
+                    <label class="flex items-center space-x-3 cursor-pointer group">
+                        <div class="relative">
+                            <input type="checkbox" id="save-settings-toggle" class="sr-only peer">
+                            <div class="w-10 h-6 bg-slate-200 rounded-full peer peer-focus:ring-2 peer-focus:ring-indigo-300 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                        </div>
+                        <span class="text-xs font-semibold text-slate-600 group-hover:text-indigo-600 transition-colors">তথ্য ব্রাউজারে সেভ রাখুন</span>
+                    </label>
+                </div>
+
+                <!-- API Management -->
+                <div class="api-box p-5 space-y-3 shadow-sm">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="shield-check" class="w-5 h-5 text-indigo-600"></i>
+                            <h2 class="text-sm font-bold text-indigo-900 uppercase tracking-wider">Cartesia API Keys</h2>
+                        </div>
+                        <span id="api-count" class="bg-indigo-600 text-white text-[10px] px-2 py-0.5 rounded-full">0 Keys</span>
+                    </div>
+                    <textarea id="multi-api-input" 
+                        class="w-full bg-white/50 border border-indigo-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none h-24" 
+                        placeholder="আপনার Cartesia API Key-গুলো এখানে দিন (প্রতি লাইনে একটি)..."></textarea>
+                    
+                    <!-- API Status Summary & Reset Controls -->
+                    <div class="flex items-center justify-between text-[11px] font-semibold text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                        <div class="flex space-x-3">
+                            <span class="text-emerald-600 flex items-center gap-1">
+                                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                                <span id="api-active-count">সচল: 0</span>
+                            </span>
+                            <span class="text-red-500 flex items-center gap-1">
+                                <span class="h-1.5 w-1.5 rounded-full bg-red-500"></span>
+                                <span id="api-exhausted-count">লিমিট শেষ: 0</span>
+                            </span>
+                        </div>
+                        <button onclick="resetExhaustedKeys()" class="text-indigo-600 hover:text-indigo-800 flex items-center space-x-1 transition active:scale-95">
+                            <i data-lucide="rotate-ccw" class="w-3 h-3"></i>
+                            <span>রিসেট</span>
+                        </button>
+                    </div>
+                    
+                    <p class="text-[10px] text-slate-400">একটি এপিআই লিমিট হলে স্বয়ংক্রিয়ভাবে পরবর্তী কি ব্যবহার করা হবে এবং এটি ব্রাউজারে সেভ থাকবে।</p>
+                </div>
+
+                <!-- Intelligent Chunk Size -->
+                <div class="config-box p-5 space-y-3 shadow-sm">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="split" class="w-5 h-5 text-slate-600"></i>
+                        <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wider">বাক্যভিত্তিক সীমা (Characters)</h2>
+                    </div>
+                    <div>
+                        <div class="relative">
+                            <input type="number" id="chunk-limit" value="500" min="100" max="5000"
+                                class="w-full bg-white border border-slate-200 rounded-lg p-2.5 pl-10 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                                placeholder="উদা: ৫০০">
+                            <i data-lucide="hash" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mt-2">লিমিটের ভেতর থাকা সর্বশেষ দাড়ি বা পূর্ণচ্ছেদ থেকে ভাগ হবে।</p>
+                    </div>
+                </div>
+
+                <!-- Script Panel -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col h-[300px]">
+                    <div class="flex items-center mb-4 space-x-2">
+                        <i data-lucide="file-text" class="w-5 h-5 text-indigo-500"></i>
+                        <h2 class="text-lg font-semibold text-slate-800">স্ক্রিপ্ট</h2>
+                    </div>
+                    <textarea id="script-input" class="flex-1 w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none" placeholder="আপনার টেক্সট এখানে পেস্ট করুন..."></textarea>
+                    <button onclick="handleSplit()" class="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl transition-all shadow-md active:scale-95">
+                        ইন্টেলিজেন্ট স্প্লিট করুন
+                    </button>
+                </div>
+
+                <!-- Voice Settings -->
+                <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-5">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="sliders" class="w-5 h-5 text-indigo-500"></i>
+                        <h2 class="text-lg font-semibold text-slate-800">কণ্ঠস্বর সেটিংস (Cartesia)</h2>
+                    </div>
+                    
+                    <!-- Voice Selection Dropdown -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">Voice ID (Bangla)</label>
+                        <select id="voice-id-input" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer">
+                            <option value="2ba861ea-7cdc-43d1-8608-4045b5a41de5">Bangla - Rubel (Male)</option>
+                            <option value="0f14d8cb-f039-41fe-a813-a9b4bee7eed8">Bangla - Nisha (Female)</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">গতি (Speed)</label>
+                            <select id="speed-select" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm">
+                                <option value="normal">Normal</option>
+                                <option value="slow">Slow</option>
+                                <option value="fast">Fast</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">পিচ (Pitch)</label>
+                            <select id="pitch-select" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm">
+                                <option value="default">Default</option>
+                                <option value="high">High</option>
+                                <option value="low">Low</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wider">আবেগ (Emotion)</label>
+                        <div id="emotion-tags" class="flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Results -->
+            <div class="lg:col-span-8 flex flex-col space-y-6">
+                <div class="bg-white rounded-3xl shadow-sm border border-slate-100 flex-1 flex flex-col overflow-hidden min-h-[500px]">
+                    <div class="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="layers" class="w-5 h-5 text-indigo-500"></i>
+                            <h2 class="text-lg font-semibold text-slate-800">প্যারালাল প্রসেসিং কিউ (Queue)</h2>
+                        </div>
+                        <div id="queue-actions" class="flex space-x-2 hidden">
+                            <button onclick="downloadZip()" class="text-xs font-bold px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl hover:bg-indigo-100 transition">ZIP ডাউনলোড</button>
+                            <button onclick="mergeAudio()" class="text-xs font-bold px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition shadow-lg">ফুল মার্জ ফাইল</button>
+                        </div>
+                        <button id="start-btn" onclick="toggleProcessing()" class="hidden flex items-center space-x-2 px-6 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition shadow-lg">
+                            <i data-lucide="play-circle" class="w-4 h-4"></i>
+                            <span>জেনারেশন শুরু করুন</span>
+                        </button>
+                    </div>
+
+                    <div id="segments-container" class="flex-1 overflow-y-auto p-5 space-y-4 custom-scrollbar bg-white max-h-[550px]">
+                        <div class="h-full flex flex-col items-center justify-center text-slate-300 space-y-4 py-32 text-center">
+                            <i data-lucide="activity" class="w-16 h-16 opacity-20"></i>
+                            <div>
+                                <p class="text-lg font-bold text-slate-400 uppercase tracking-widest">Motion Studio Idle</p>
+                                <p class="text-sm">স্ক্রিপ্ট স্প্লিট করে কাজ শুরু করুন।</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Fallback & API Console -->
+                <div class="bg-slate-900 text-slate-300 rounded-2xl p-5 shadow-sm border border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <div class="flex items-center space-x-2">
+                            <i data-lucide="terminal" class="w-5 h-5 text-emerald-400"></i>
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-200">স্মার্ট এপিআই স্ট্যাটাস ও ফলব্যাক কনসোল</h3>
+                        </div>
+                        <span class="flex h-2 w-2 relative">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                    </div>
+                    <div id="console-output" class="console-log h-32 overflow-y-auto custom-scrollbar space-y-1 text-slate-400">
+                        <div class="text-slate-500">&gt; সিস্টেমের কার্যক্রম এখানে রিয়েল-টাইমে প্রদর্শিত হবে...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+        <div class="bg-slate-900 text-white shadow-2xl rounded-2xl p-4 flex items-center space-x-3 min-w-[320px]">
+            <div id="toast-icon" class="p-1 bg-white/20 rounded-full"></div>
+            <p id="toast-msg" class="text-sm font-medium"></p>
+        </div>
+    </div>
+
+    <script>
+        let apiKeys = [];
+        let currentApiKeyIdx = 0;
+        let segments = [];
+        let isProcessing = false;
+        let selectedEmotion = "Neutral";
+        let abortController = null;
+        let renderFrameId = null;
+
+        let exhaustedKeys = new Set();
+
+        const EMOTIONS = ["Neutral", "Happy", "Serious", "Calm", "Energetic", "Whispering"];
+
+        function init() {
+            lucide.createIcons();
+            populateEmotions();
+            loadSettings();
+            
+            document.getElementById('multi-api-input').addEventListener('input', handleSettingsChange);
+            document.getElementById('chunk-limit').addEventListener('input', handleSettingsChange);
+            document.getElementById('voice-id-input').addEventListener('change', handleSettingsChange);
+            document.getElementById('speed-select').addEventListener('change', handleSettingsChange);
+            document.getElementById('pitch-select').addEventListener('change', handleSettingsChange);
+            document.getElementById('save-settings-toggle').addEventListener('change', handleSettingsChange);
+        }
+
+        function writeToConsole(message, type = 'info') {
+            const consoleBox = document.getElementById('console-output');
+            const time = new Date().toLocaleTimeString();
+            const logDiv = document.createElement('div');
+            
+            let color = 'text-slate-400';
+            if (type === 'error') color = 'text-red-400 font-semibold';
+            if (type === 'success') color = 'text-emerald-400';
+            if (type === 'warning') color = 'text-amber-400';
+            if (type === 'system') color = 'text-indigo-400';
+
+            logDiv.className = `console-log ${color}`;
+            logDiv.innerHTML = `<span class="text-slate-600">[${time}]</span> ${message}`;
+            consoleBox.appendChild(logDiv);
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+        }
+
+        function populateEmotions() {
+            const emoContainer = document.getElementById('emotion-tags');
+            EMOTIONS.forEach(emo => {
+                const btn = document.createElement('button');
+                btn.id = `emo-btn-${emo}`;
+                btn.className = `px-4 py-2 text-xs font-semibold rounded-xl border transition-all ${emo === 'Neutral' ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`;
+                btn.textContent = emo;
+                btn.onclick = () => { selectedEmotion = emo; updateEmotionUI(); handleSettingsChange(); };
+                emoContainer.appendChild(btn);
+            });
+        }
+
+        function updateEmotionUI() {
+            const emoContainer = document.getElementById('emotion-tags');
+            Array.from(emoContainer.children).forEach(b => {
+                b.className = 'px-4 py-2 text-xs font-semibold rounded-xl border transition-all bg-white text-slate-600 border-slate-200 hover:border-indigo-300';
+            });
+            const activeBtn = document.getElementById(`emo-btn-${selectedEmotion}`);
+            if (activeBtn) activeBtn.className = 'px-4 py-2 text-xs font-semibold rounded-xl border transition-all bg-indigo-600 text-white border-indigo-600 shadow-md';
+        }
+
+        function handleSettingsChange() {
+            const saveEnabled = document.getElementById('save-settings-toggle').checked;
+            apiKeys = document.getElementById('multi-api-input').value.split('\n').map(k => k.trim()).filter(k => k !== "");
+            
+            updateKeyStats();
+            
+            if (saveEnabled) {
+                const settings = {
+                    apiKeysRaw: document.getElementById('multi-api-input').value,
+                    chunkLimit: document.getElementById('chunk-limit').value,
+                    voiceId: document.getElementById('voice-id-input').value,
+                    speed: document.getElementById('speed-select').value,
+                    pitch: document.getElementById('pitch-select').value,
+                    emotion: selectedEmotion,
+                    saveEnabled: true
+                };
+                localStorage.setItem('motion_tts_cartesia_settings', JSON.stringify(settings));
+            } else {
+                localStorage.removeItem('motion_tts_cartesia_settings');
+            }
+            updateStartButtonText();
+        }
+
+        function updateKeyStats() {
+            const rawKeys = document.getElementById('multi-api-input').value.split('\n').map(k => k.trim()).filter(k => k !== "");
+            apiKeys = rawKeys;
+            
+            let activeCount = 0;
+            let exhaustedCount = 0;
+            
+            rawKeys.forEach(k => {
+                if (exhaustedKeys.has(k)) {
+                    exhaustedCount++;
+                } else {
+                    activeCount++;
+                }
+            });
+            
+            document.getElementById('api-count').textContent = `${rawKeys.length} Keys`;
+            document.getElementById('api-active-count').textContent = `সচল: ${activeCount}`;
+            document.getElementById('api-exhausted-count').textContent = `লিমিট শেষ: ${exhaustedCount}`;
+        }
+
+        function resetExhaustedKeys() {
+            exhaustedKeys.clear();
+            localStorage.setItem('motion_tts_exhausted_keys', JSON.stringify([]));
+            updateKeyStats();
+            writeToConsole("সকল এপিআই কি-এর লিমিট স্ট্যাটাস রিসেট করা হয়েছে। সব কি আবার সচল হিসেবে গণ্য হবে।", "system");
+            toast("সব API Key রিসেট করে সচল করা হয়েছে!");
+        }
+
+        function loadSettings() {
+            const saved = localStorage.getItem('motion_tts_cartesia_settings');
+            
+            // Load exhausted keys from browser storage
+            const savedExhausted = localStorage.getItem('motion_tts_exhausted_keys');
+            if (savedExhausted) {
+                try {
+                    exhaustedKeys = new Set(JSON.parse(savedExhausted));
+                } catch (e) {
+                    exhaustedKeys = new Set();
+                }
+            }
+
+            // Load last working key index to resume from there
+            const savedIdx = localStorage.getItem('motion_tts_last_working_idx');
+            if (savedIdx !== null) {
+                currentApiKeyIdx = parseInt(savedIdx, 10) || 0;
+            }
+
+            if (saved) {
+                const s = JSON.parse(saved);
+                document.getElementById('save-settings-toggle').checked = true;
+                document.getElementById('multi-api-input').value = s.apiKeysRaw || "";
+                document.getElementById('chunk-limit').value = s.chunkLimit || "500";
+                
+                const voiceSelect = document.getElementById('voice-id-input');
+                if (s.voiceId && Array.from(voiceSelect.options).some(opt => opt.value === s.voiceId)) {
+                    voiceSelect.value = s.voiceId;
+                } else {
+                    voiceSelect.value = "2ba861ea-7cdc-43d1-8608-4045b5a41de5";
+                }
+
+                document.getElementById('speed-select').value = s.speed || "normal";
+                document.getElementById('pitch-select').value = s.pitch || "default";
+                selectedEmotion = s.emotion || "Neutral";
+                apiKeys = (s.apiKeysRaw || "").split('\n').map(k => k.trim()).filter(k => k !== "");
+                
+                updateKeyStats();
+                updateEmotionUI();
+            } else {
+                updateKeyStats();
+            }
+        }
+
+        function toast(msg, type = 'info') {
+            const t = document.getElementById('toast');
+            const m = document.getElementById('toast-msg');
+            const i = document.getElementById('toast-icon');
+            m.textContent = msg;
+            i.innerHTML = type === 'error' ? '<i data-lucide="alert-circle" class="w-4 h-4"></i>' : '<i data-lucide="check-circle" class="w-4 h-4"></i>';
+            lucide.createIcons();
+            t.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 4000);
+        }
+
+        function handleSplit() {
+            let text = document.getElementById('script-input').value.trim();
+            const charLimit = parseInt(document.getElementById('chunk-limit').value) || 500;
+            if (!text) return toast("স্ক্রিপ্ট ইনপুট দিন!", "error");
+
+            segments = [];
+            
+            while (text.length > 0) {
+                if (text.length <= charLimit) {
+                    segments.push({ text: text, status: 'pending', blob: null, pcm: null, rate: null, usedKeyIndex: null });
+                    break;
+                }
+
+                let sub = text.substring(0, charLimit);
+                const lastSentenceEnd = Math.max(
+                    sub.lastIndexOf('।'), sub.lastIndexOf('.'),
+                    sub.lastIndexOf('?'), sub.lastIndexOf('!')
+                );
+
+                let splitIndex;
+                if (lastSentenceEnd !== -1) {
+                    splitIndex = lastSentenceEnd + 1;
+                } else {
+                    const lastSpace = sub.lastIndexOf(' ');
+                    splitIndex = (lastSpace !== -1) ? lastSpace : charLimit;
+                }
+
+                const chunk = text.substring(0, splitIndex).trim();
+                if (chunk) {
+                    segments.push({ text: chunk, status: 'pending', blob: null, pcm: null, rate: null, usedKeyIndex: null });
+                }
+                text = text.substring(splitIndex).trim();
+            }
+
+            renderSegments();
+            document.getElementById('start-btn').classList.remove('hidden');
+            document.getElementById('header-actions').classList.remove('hidden');
+            updateStartButtonText();
+            writeToConsole(`স্ক্রিপ্ট সফলভাবে ${segments.length}টি সেগমেন্টে বিভক্ত করা হয়েছে।`, 'system');
+            toast(`${segments.length}টি বাক্যভিত্তিক সেগমেন্ট তৈরি হয়েছে।`);
+        }
+
+        function renderSegments() {
+            if (renderFrameId) cancelAnimationFrame(renderFrameId);
+            renderFrameId = requestAnimationFrame(() => {
+                const container = document.getElementById('segments-container');
+                container.innerHTML = "";
+                segments.forEach((s, i) => {
+                    const div = document.createElement('div');
+                    div.className = `p-5 rounded-2xl border flex items-center bg-white transition-all ${s.status === 'generating' ? 'border-indigo-400 shadow-md' : s.status === 'error' ? 'border-red-300 bg-red-50' : 'border-slate-100 hover:border-slate-200'}`;
+                    
+                    const icon = s.status === 'done' ? 'check-circle' : s.status === 'generating' ? 'loader-2' : s.status === 'error' ? 'alert-octagon' : 'circle';
+                    const spin = s.status === 'generating' ? 'animate-spin text-indigo-500' : s.status === 'done' ? 'text-emerald-500' : s.status === 'error' ? 'text-red-500' : 'text-slate-300';
+
+                    let subtitle = `<span class="text-[10px] font-bold text-slate-400 uppercase">${s.status === 'pending' ? 'অপেক্ষা করছে' : s.status}</span>`;
+                    if (s.status === 'generating') {
+                        subtitle = `<span class="text-[10px] font-bold text-indigo-500 uppercase animate-pulse">তৈরি হচ্ছে...</span>`;
+                    } else if (s.status === 'done' && s.usedKeyIndex !== null) {
+                        subtitle = `<span class="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">API Key #${s.usedKeyIndex + 1}</span>`;
+                    }
+
+                    div.innerHTML = `
+                        <div class="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-slate-50 rounded-lg mr-4">
+                            <i data-lucide="${icon}" class="${spin} w-5 h-5"></i>
+                        </div>
+                        <div class="flex-1 min-w-0 pr-4">
+                            <div class="flex items-center justify-between">
+                                <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Part ${i + 1}</h4>
+                                <span class="text-[10px] font-bold text-indigo-400">${s.text.length} Chars</span>
+                            </div>
+                            <p class="text-xs text-slate-600 mt-1 truncate">"${s.text}"</p>
+                        </div>
+                        <div class="w-48 flex flex-col items-end justify-center pl-4 border-l border-slate-100 gap-1.5">
+                            ${s.status === 'done' ? `<audio controls class="h-8 w-full" src="${URL.createObjectURL(s.blob)}"></audio>` : ''}
+                            ${subtitle}
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+                lucide.createIcons();
+                updateProgress();
+            });
+        }
+
+        function updateProgress() {
+            const done = segments.filter(s => s.status === 'done').length;
+            const pct = segments.length ? Math.round((done / segments.length) * 100) : 0;
+            document.getElementById('progress-bar').style.width = pct + '%';
+            document.getElementById('progress-text').textContent = pct + '%';
+            
+            if (!segments.some(s => s.status === 'pending' || s.status === 'generating') && segments.length > 0) {
+                document.getElementById('queue-actions').classList.remove('hidden');
+            } else {
+                document.getElementById('queue-actions').classList.add('hidden');
+            }
+            updateStartButtonText();
+        }
+
+        function updateStartButtonText() {
+            const startBtn = document.getElementById('start-btn');
+            if (!startBtn) return;
+
+            if (isProcessing) {
+                startBtn.innerHTML = '<i data-lucide="square" class="w-4 h-4"></i><span>জেনারেশন বন্ধ করুন (Pause)</span>';
+                startBtn.className = "flex items-center space-x-2 px-6 py-2.5 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-700 transition shadow-lg";
+            } else {
+                const doneCount = segments.filter(s => s.status === 'done').length;
+                if (doneCount > 0 && doneCount < segments.length) {
+                    startBtn.innerHTML = '<i data-lucide="play-circle" class="w-4 h-4"></i><span>বাকি অংশ জেনারেট করুন (Resume)</span>';
+                    startBtn.className = "flex items-center space-x-2 px-6 py-2.5 bg-indigo-600 text-white text-sm font-bold rounded-xl hover:bg-indigo-700 transition shadow-lg animate-pulse";
+                } else if (doneCount === segments.length && segments.length > 0) {
+                    startBtn.innerHTML = '<i data-lucide="rotate-ccw" class="w-4 h-4"></i><span>সব আবার জেনারেট করুন</span>';
+                    startBtn.className = "flex items-center space-x-2 px-6 py-2.5 bg-slate-600 text-white text-sm font-bold rounded-xl hover:bg-slate-700 transition shadow-lg";
+                } else {
+                    startBtn.innerHTML = '<i data-lucide="play-circle" class="w-4 h-4"></i><span>জেনারেশন শুরু করুন</span>';
+                    startBtn.className = "flex items-center space-x-2 px-6 py-2.5 bg-emerald-600 text-white text-sm font-bold rounded-xl hover:bg-emerald-700 transition shadow-lg";
+                }
+            }
+            lucide.createIcons();
+        }
+
+        async function processSingleSegment(idx, signal) {
+            let success = false;
+            let startKeyIdx = currentApiKeyIdx;
+            let totalAvailableKeys = apiKeys.length;
+
+            if (startKeyIdx >= totalAvailableKeys) {
+                startKeyIdx = 0;
+            }
+
+            for (let i = 0; i < totalAvailableKeys; i++) {
+                if (signal.aborted) {
+                    segments[idx].status = 'pending';
+                    renderSegments();
+                    return;
+                }
+                
+                const keyIndex = (startKeyIdx + i) % totalAvailableKeys;
+                const key = apiKeys[keyIndex];
+
+                // Instantly skip known exhausted keys
+                if (exhaustedKeys.has(key)) {
+                    continue;
+                }
+
+                writeToConsole(`Part ${idx + 1} এর জন্য API Key #${keyIndex + 1} দিয়ে অডিও তৈরি করার চেষ্টা চলছে...`, 'info');
+
+                try {
+                    const res = await fetchTTS(segments[idx].text, key, signal);
+                    segments[idx].blob = pcmToWav(res.pcm, res.rate);
+                    segments[idx].pcm = res.pcm;
+                    segments[idx].rate = res.rate;
+                    segments[idx].status = 'done';
+                    segments[idx].usedKeyIndex = keyIndex;
+                    success = true;
+                    
+                    // Rotate and persist working index globally and locally
+                    currentApiKeyIdx = keyIndex;
+                    localStorage.setItem('motion_tts_last_working_idx', keyIndex);
+                    
+                    writeToConsole(`Part ${idx + 1} সফলভাবে API Key #${keyIndex + 1} দিয়ে সম্পন্ন হয়েছে।`, 'success');
+                    break; 
+                } catch (e) {
+                    if (e.name === 'AbortError') {
+                        segments[idx].status = 'pending';
+                        renderSegments();
+                        throw e; 
+                    }
+                    
+                    // Mark key as exhausted and save to browser storage instantly
+                    exhaustedKeys.add(key);
+                    localStorage.setItem('motion_tts_exhausted_keys', JSON.stringify(Array.from(exhaustedKeys)));
+                    updateKeyStats();
+                    
+                    // Display API error / rate limit log to user
+                    writeToConsole(`Part ${idx + 1} তৈরি করার সময় API Key #${keyIndex + 1} ব্যর্থ হয়েছে/লিমিট শেষ হয়েছে। [Captured: ${e.message}]`, 'warning');
+                }
+            }
+
+            if (!success && !signal.aborted) {
+                segments[idx].status = 'error'; 
+                writeToConsole(`Part ${idx + 1} সম্পূর্ণ ব্যর্থ! কোনো সচল এপিআই কি পাওয়া যায়নি। দয়া করে নতুন কী যুক্ত করুন বা রিসেট করুন।`, 'error');
+            }
+
+            renderSegments(); 
+        }
+
+        async function toggleProcessing() {
+            // Hot reload of API keys directly when resuming/starting
+            apiKeys = document.getElementById('multi-api-input').value.split('\n').map(k => k.trim()).filter(k => k !== "");
+            updateKeyStats();
+
+            if (apiKeys.length === 0) {
+                writeToConsole("কার্যকরী করার জন্য কোনো এপিআই কি পাওয়া যায়নি!", "error");
+                return toast("অন্তত একটি সচল API Key যোগ করুন!", "error");
+            }
+            
+            if (isProcessing) {
+                // Instantly trigger abort signal for all running promises
+                abortController.abort();
+                isProcessing = false;
+                
+                // Roll back only active generating segments to pending to allow resuming
+                segments.forEach(s => {
+                    if (s.status === 'generating') {
+                        s.status = 'pending';
+                    }
+                });
+                
+                renderSegments();
+                writeToConsole("জেনারেশন সাময়িকভাবে পজ করা হয়েছে। আপনি চাইলে এখন নতুন এপিআই কি (API Key) যোগ করতে পারেন এবং এরপর রিজিউম করতে পারেন।", "system");
+                toast("জেনারেশন সাময়িকভাবে বন্ধ করা হয়েছে। নতুন API Key যোগ করে আবার শুরু করতে পারেন।", "info");
+                return;
+            }
+            
+            isProcessing = true;
+            abortController = new AbortController();
+            updateStartButtonText();
+
+            // Handle fully fresh generation if everything is completed and user restarts
+            const doneCount = segments.filter(s => s.status === 'done').length;
+            if (doneCount === segments.length && segments.length > 0) {
+                segments.forEach(s => {
+                    s.status = 'pending';
+                    s.blob = null;
+                    s.pcm = null;
+                    s.rate = null;
+                    s.usedKeyIndex = null;
+                });
+            }
+
+            const tasks = [];
+            
+            // Collect index of parts that are not yet finished (preserves completed audios)
+            segments.forEach((s, idx) => {
+                if (s.status === 'pending' || s.status === 'error' || s.status === 'generating') {
+                    s.status = 'generating';
+                    tasks.push(idx);
+                }
+            });
+
+            renderSegments();
+
+            if (tasks.length === 0) {
+                isProcessing = false;
+                updateStartButtonText();
+                return;
+            }
+
+            writeToConsole(`মোট ${tasks.length}টি পেন্ডিং সেগমেন্টের অডিও জেনারেশন শুরু হচ্ছে...`, 'system');
+
+            // Running tasks concurrently
+            const promises = tasks.map(idx => processSingleSegment(idx, abortController.signal));
+
+            try {
+                await Promise.all(promises);
+            } catch(e) {
+                if (e.name !== 'AbortError') {
+                    console.error("Batch processing error", e);
+                }
+            }
+
+            isProcessing = false;
+            
+            const hasErrors = segments.some(s => s.status === 'error');
+            const hasPending = segments.some(s => s.status === 'pending');
+            
+            if (!hasErrors && !hasPending) {
+                writeToConsole("অভিনন্দন! আপনার স্ক্রিপ্টের সব কয়টি অডিও সম্পূর্ণভাবে তৈরি হয়ে গেছে।", "success");
+                toast("সফলভাবে সমস্ত অডিও তৈরি হয়েছে।", "success");
+            } else if (hasErrors) {
+                writeToConsole("কিছু সেগমেন্টের অডিও তৈরি করতে সমস্যা হয়েছে (সম্ভবত সবগুলো API Key লিমিট শেষ)। নতুন Key দিয়ে 'Resume' করুন।", "error");
+                toast("কিছু সেগমেন্ট তৈরি করা সম্ভব হয়নি। নতুন Key দিয়ে পুনরায় চেষ্টা করুন।", "error");
+            }
+            
+            renderSegments();
+        }
+
+        async function fetchTTS(text, key, signal) {
+            const voiceId = document.getElementById('voice-id-input').value;
+            if (!voiceId) throw new Error("Voice ID is missing!");
+
+            const speed = document.getElementById('speed-select').value;
+            let speedMap = { "normal": "normal", "slow": "slowest", "fast": "fastest" };
+
+            const emotionMap = {
+                "Neutral": ["positivity:low"],
+                "Happy": ["positivity:high", "curiosity:high"],
+                "Serious": ["positivity:low", "surprise:low"],
+                "Calm": ["positivity:low", "surprise:low"],
+                "Energetic": ["positivity:high", "surprise:high"],
+                "Whispering": []
+            };
+
+            const payload = {
+                model_id: "sonic-3.5",
+                transcript: text,
+                voice: {
+                    mode: "id",
+                    id: voiceId,
+                    __experimental_controls: {
+                        speed: speedMap[speed] || "normal",
+                        emotion: emotionMap[selectedEmotion] || ["positivity:low"]
+                    }
+                },
+                output_format: {
+                    container: "raw",
+                    encoding: "pcm_s16le",
+                    sample_rate: 44100
+                }
+            };
+
+            const res = await fetch("https://api.cartesia.ai/tts/bytes", {
+                method: "POST",
+                headers: {
+                    "Cartesia-Version": "2024-06-10",
+                    "X-API-Key": key,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload),
+                signal
+            });
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error?.message || `HTTP ${res.status}`);
+            }
+
+            const buffer = await res.arrayBuffer();
+            const pcm = new Int16Array(buffer);
+            return { pcm, rate: 44100 };
+        }
+
+        function pcmToWav(pcm, rate) {
+            const buffer = new ArrayBuffer(44 + pcm.length * 2);
+            const view = new DataView(buffer);
+            const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+            writeStr(0, 'RIFF'); view.setUint32(4, 36 + pcm.length * 2, true);
+            writeStr(8, 'WAVEfmt '); view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+            view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true);
+            view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+            writeStr(36, 'data'); view.setUint32(40, pcm.length * 2, true);
+            for (let i = 0; i < pcm.length; i++) view.setInt16(44 + i * 2, pcm[i], true);
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        async function downloadZip() {
+            const zip = new JSZip();
+            segments.forEach((s, i) => { if(s.blob) zip.file(`motion_part_${i+1}.wav`, s.blob); });
+            const content = await zip.generateAsync({ type: "blob" });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = `MotionTTS_Package.zip`;
+            link.click();
+        }
+
+        function mergeAudio() {
+            const valid = segments.filter(s => s.pcm);
+            if (!valid.length) return;
+            const rate = valid[0].rate;
+            const total = valid.reduce((acc, s) => acc + s.pcm.length, 0);
+            const merged = new Int16Array(total);
+            let offset = 0;
+            valid.forEach(s => { merged.set(s.pcm, offset); offset += s.pcm.length; });
+            const blob = pcmToWav(merged, rate);
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = "MotionTTS_Full_Audio.wav";
+            link.click();
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
