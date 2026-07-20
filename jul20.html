@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motion TTS - Multi AI Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #0f172a;
+        }
+        
+        /* Custom scrollbar for premium touch */
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        /* Premium Android Glassmorphism */
+        .android-card { 
+            background: rgba(255, 255, 255, 0.85); 
+            backdrop-filter: blur(12px); 
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            border-radius: 24px;
+        }
+
+        .api-box { 
+            background: rgba(238, 242, 255, 0.6); 
+            backdrop-filter: blur(8px); 
+            border: 2px dashed #6366f1; 
+            border-radius: 20px; 
+        }
+
+        /* Login Overlay Styling resembling native Android Google sign-in */
+        #login-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a;
+            z-index: 200; display: flex; align-items: center; justify-content: center;
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        #login-overlay.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+        /* Navigation Tab Management */
+        .app-tab-content { display: none; }
+        .app-tab-content.active { display: flex; flex-direction: column; }
+        
+        /* Ripple style animation for android touch buttons */
+        .android-btn {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .android-btn:active {
+            transform: scale(0.96);
+            opacity: 0.9;
+        }
+
+        /* Fixed Android Device Shell on desktop, Native on mobile */
+        @media (min-width: 768px) {
+            .phone-container {
+                max-width: 440px;
+                height: 900px;
+                border: 12px solid #1e293b;
+                border-radius: 48px;
+                box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+                background: #f8fafc;
+                position: relative;
+                padding-top: 24px; /* Space for physical phone notch representation */
+            }
+            .phone-notch {
+                width: 140px;
+                height: 28px;
+                background: #1e293b;
+                position: absolute;
+                top: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                border-bottom-left-radius: 18px;
+                border-bottom-right-radius: 18px;
+                z-index: 150;
+            }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen text-slate-950 p-0 md:p-4">
+
+    <!-- Main Responsive Android Device Framework -->
+    <div class="phone-container w-full min-h-screen md:min-h-0 flex flex-col bg-[#f8fafc] overflow-hidden relative">
+        <div class="phone-notch hidden md:block"></div>
+
+        <!-- Auth Overlay (Inside Android UI framework) -->
+        <div id="login-overlay">
+            <div class="w-full max-w-md px-6 py-8 flex flex-col justify-center h-full relative text-white">
+                <div class="text-center mb-10">
+                    <div class="inline-flex bg-gradient-to-tr from-indigo-600 to-purple-500 p-4 rounded-3xl text-white shadow-xl mb-4">
+                        <i data-lucide="zap" class="w-10 h-10"></i>
+                    </div>
+                    <h1 class="text-4xl font-black tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent mb-2">Motion TTS</h1>
+                    <p class="text-sm text-slate-400 font-medium" id="auth-subtitle">Sign in to your account</p>
+                </div>
+
+                <!-- Login Form -->
+                <form id="login-form" class="space-y-5" onsubmit="handleLogin(event)">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-widest">Email</label>
+                        <div class="relative">
+                            <i data-lucide="mail" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5"></i>
+                            <input type="email" id="email" required
+                                class="w-full bg-slate-800/80 border border-slate-700/60 rounded-2xl py-3.5 pl-12 pr-4 text-sm text-white focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                                placeholder="Enter your email">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-widest">Password</label>
+                        <div class="relative">
+                            <i data-lucide="lock" class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5"></i>
+                            <input type="password" id="password" required
+                                class="w-full bg-slate-800/80 border border-slate-700/60 rounded-2xl py-3.5 pl-12 pr-4 text-sm text-white focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
+                                placeholder="Enter your password">
+                        </div>
+                    </div>
+                    <div id="login-error" class="hidden text-red-400 text-xs font-semibold text-center bg-red-950/40 py-2.5 rounded-xl border border-red-900/50"></div>
+                    
+                    <button type="submit" id="login-btn" class="android-btn w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 rounded-2xl transition-all shadow-lg active:scale-95 flex justify-center items-center gap-2 mt-4 text-sm">
+                        <span>Sign In</span>
+                        <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    </button>
+                </form>
+                
+                <p class="text-center text-[11px] text-slate-500 mt-12" id="auth-footer-text">
+                    Secure Login • Motion OS Android Studio
+                </p>
+            </div>
+        </div>
+
+        <!-- Main App Content (Optimized Viewport) -->
+        <div id="app" class="flex-1 flex flex-col overflow-hidden opacity-0 transition-opacity duration-500">
+            <!-- App Header -->
+            <header class="px-5 py-3 flex items-center justify-between bg-white border-b border-slate-100 shrink-0">
+                <div class="flex items-center space-x-2">
+                    <div class="bg-indigo-600 p-2.5 rounded-xl text-white shadow-md shadow-indigo-100">
+                        <i data-lucide="box" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-base font-black tracking-tight text-indigo-900 leading-tight">Motion TTS</h1>
+                        <p class="text-[9px] text-slate-400 font-bold tracking-wider uppercase">Parallel Studio</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center space-x-3">
+                    <div id="user-badge" class="text-[9px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full truncate max-w-[100px]">User</div>
+                    <button onclick="handleLogout()" class="text-xs font-semibold text-slate-400 hover:text-red-500 transition-colors p-1" title="Log Out">
+                        <i data-lucide="log-out" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Real-time Android progress indicator -->
+            <div class="w-full bg-slate-100 h-1.5 relative overflow-hidden shrink-0">
+                <div id="progress-bar" class="absolute left-0 top-0 h-full bg-indigo-500 transition-all duration-300 w-0"></div>
+            </div>
+
+            <!-- Tab Switcher Area -->
+            <main class="flex-1 overflow-y-auto p-4 custom-scrollbar space-y-4 pb-20">
+
+                <!-- TAB 1: SCRIPT & CONFIG (DEFAULT) -->
+                <div id="tab-script" class="app-tab-content active space-y-4">
+                    <!-- Script Section -->
+                    <div class="android-card p-4 space-y-3">
+                        <div class="flex items-center space-x-2 border-b border-slate-100 pb-2">
+                            <i data-lucide="file-text" class="w-4 h-4 text-indigo-500"></i>
+                            <h2 class="text-sm font-bold text-slate-800">Script Panel</h2>
+                        </div>
+                        <textarea id="script-input" class="w-full h-36 bg-slate-50 border border-slate-200 rounded-2xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none custom-scrollbar" placeholder="Paste your text script here..."></textarea>
+                        
+                        <button onclick="handleSplit()" class="android-btn w-full bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-3.5 rounded-2xl transition-all shadow-md flex justify-center items-center gap-2">
+                            <i data-lucide="scissors" class="w-4 h-4"></i>
+                            <span>Intelligent Split</span>
+                        </button>
+                    </div>
+
+                    <!-- Voice Settings Card -->
+                    <div class="android-card p-4 space-y-4">
+                        <div class="flex items-center space-x-2 border-b border-slate-100 pb-2">
+                            <i data-lucide="sliders" class="w-4 h-4 text-indigo-500"></i>
+                            <h2 class="text-sm font-bold text-slate-800">Voice Settings</h2>
+                        </div>
+                        
+                        <!-- Provider Selection -->
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">AI Provider</label>
+                            <select id="provider-select" onchange="handleProviderChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer font-bold text-indigo-700">
+                                <option value="cartesia">Cartesia AI</option>
+                                <option value="elevenlabs">ElevenLabs</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider">Voice Selection</label>
+                            <select id="voice-id-input" onchange="handleSettingsChange()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none cursor-pointer">
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+
+                        <!-- Cartesia Specific Controls -->
+                        <div id="cartesia-controls" class="space-y-4">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[9px] font-bold text-slate-400 mb-1 uppercase">Speed</label>
+                                    <select id="speed-select" onchange="handleSettingsChange()" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs"><option value="normal">Normal</option><option value="slow">Slow</option><option value="fast">Fast</option></select>
+                                </div>
+                                <div>
+                                    <label class="block text-[9px] font-bold text-slate-400 mb-1 uppercase">Pitch</label>
+                                    <select id="pitch-select" onchange="handleSettingsChange()" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs"><option value="default">Default</option><option value="high">High</option><option value="low">Low</option></select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-[9px] font-bold text-slate-400 mb-1 uppercase">Emotion</label>
+                                <div id="emotion-tags" class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar"></div>
+                            </div>
+                        </div>
+
+                        <!-- ElevenLabs Specific Controls -->
+                        <div id="elevenlabs-controls" class="hidden text-center py-2 bg-slate-50 rounded-xl border border-slate-100">
+                            <p class="text-[11px] text-slate-500 font-medium"><i data-lucide="info" class="w-3.5 h-3.5 inline mr-1 -mt-0.5"></i>Default settings are used for ElevenLabs.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: QUEUE (SEGMENTS LIST) -->
+                <div id="tab-queue" class="app-tab-content space-y-4">
+                    <div class="android-card p-4 space-y-3 flex-1 flex flex-col">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                            <div class="flex items-center space-x-2">
+                                <i data-lucide="layers" class="w-4 h-4 text-indigo-500"></i>
+                                <h2 class="text-sm font-bold text-slate-800">Parallel Process Queue</h2>
+                            </div>
+                            
+                            <div id="queue-actions" class="flex gap-1.5 hidden">
+                                <button onclick="downloadZip()" class="text-[10px] font-bold px-2.5 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100 transition-colors">ZIP</button>
+                                <button onclick="mergeAudio()" class="text-[10px] font-bold px-2.5 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow">Merge</button>
+                            </div>
+                        </div>
+
+                        <!-- Segment Cards Area -->
+                        <div id="segments-container" class="space-y-3 min-h-[250px] overflow-y-auto custom-scrollbar flex-1">
+                            <div class="h-full flex flex-col items-center justify-center text-slate-300 space-y-3 py-16 text-center">
+                                <i data-lucide="activity" class="w-12 h-12 opacity-30"></i>
+                                <div>
+                                    <p class="text-xs font-bold text-slate-400 uppercase tracking-widest">Motion Studio Idle</p>
+                                    <p class="text-[11px] text-slate-400">Split script to start processing.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Generation Main Trigger -->
+                        <div class="pt-2">
+                            <button id="start-btn" onclick="toggleProcessing()" class="hidden android-btn w-full flex items-center justify-center space-x-2 py-3 bg-emerald-600 text-white text-xs font-bold rounded-2xl hover:bg-emerald-700 transition shadow-lg">
+                                <i data-lucide="play-circle" class="w-4 h-4"></i><span>Start Generation</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: LIVE TRACKER / MONITOR -->
+                <div id="tab-monitor" class="app-tab-content space-y-4">
+                    <!-- API Status Mini Component -->
+                    <div class="android-card p-4 space-y-3">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                            <div class="flex items-center gap-1.5">
+                                <i data-lucide="server" class="w-4 h-4 text-indigo-500"></i>
+                                <h2 class="text-xs font-bold text-slate-800 uppercase tracking-wider">API Status</h2>
+                            </div>
+                            <span id="status-provider-badge" class="text-[8px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded">Cartesia</span>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="bg-slate-50 border border-slate-100 p-2 rounded-xl text-center">
+                                <div class="text-[8px] text-slate-400 font-bold uppercase mb-0.5">Total</div>
+                                <div class="text-base font-black text-indigo-600" id="stat-total">0</div>
+                            </div>
+                            <div class="bg-emerald-50 border border-emerald-100 p-2 rounded-xl text-center">
+                                <div class="text-[8px] text-emerald-600/70 font-bold uppercase mb-0.5">Active</div>
+                                <div class="text-base font-black text-emerald-600" id="stat-active">0</div>
+                            </div>
+                            <div class="bg-red-50 border border-red-100 p-2 rounded-xl text-center">
+                                <div class="text-[8px] text-red-600/70 font-bold uppercase mb-0.5">Dead</div>
+                                <div class="text-base font-black text-red-600" id="stat-dead">0</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- System Monitor Frame -->
+                    <div class="bg-slate-900 p-3 rounded-[24px] border-b-4 border-slate-950 shadow-xl relative">
+                        <div class="bg-[#060913] rounded-2xl p-3 border border-slate-800 flex flex-col h-72 overflow-hidden relative font-mono text-xs">
+                            
+                            <!-- Scanner Effect -->
+                            <div class="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(255,255,255,0.015)_1px,transparent_1px)] bg-[size:100%_3px] z-10"></div>
+                            
+                            <!-- Tracker Section -->
+                            <div class="border-b border-slate-800/80 pb-2 mb-2">
+                                <div class="flex items-center justify-between mb-1">
+                                    <span class="text-[9px] font-bold text-emerald-400 flex items-center gap-1">
+                                        <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        LIVE TRACKER
+                                    </span>
+                                    <span id="progress-text" class="text-[9px] text-slate-400">0% Completed</span>
+                                </div>
+                                <div id="live-tracker-list" class="space-y-1.5 h-24 overflow-y-auto custom-scrollbar">
+                                    <div class="text-slate-500 text-center py-2 italic text-[10px]">&gt; Waiting...</div>
+                                </div>
+                            </div>
+
+                            <!-- Console Section -->
+                            <div class="flex-1 flex flex-col overflow-hidden">
+                                <span class="text-[9px] font-bold text-indigo-400 mb-1 flex items-center gap-1">
+                                    <i data-lucide="terminal" class="w-3 h-3"></i>SYSTEM CONSOLE
+                                </span>
+                                <div id="console-output" class="console-log flex-1 overflow-y-auto custom-scrollbar space-y-1 text-slate-400 text-[10px] pr-1">
+                                    <div class="text-indigo-400/80 font-bold">&gt; Motion OS Initialized...</div>
+                                    <div class="text-slate-500">&gt; System Ready...</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: ADMIN CONTROLS -->
+                <div id="tab-admin" class="app-tab-content space-y-4">
+                    <!-- API Management -->
+                    <div id="admin-api-box" class="api-box p-4 space-y-3 hidden">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-1.5">
+                                <i data-lucide="key" class="w-4 h-4 text-indigo-600"></i>
+                                <h2 class="text-xs font-bold text-indigo-900 uppercase tracking-wider">API Keys (Admin)</h2>
+                            </div>
+                            <span id="api-count" class="bg-indigo-600 text-white text-[9px] px-2 py-0.5 rounded-full">0 Keys</span>
+                        </div>
+                        
+                        <!-- Admin API Tabs -->
+                        <div class="flex gap-1 mb-1 bg-indigo-50 p-1 rounded-lg">
+                            <button id="api-tab-cartesia" onclick="switchAdminApiTab('cartesia')" class="flex-1 text-[10px] font-bold py-1 rounded bg-white text-indigo-600 shadow-sm transition-all">Cartesia</button>
+                            <button id="api-tab-elevenlabs" onclick="switchAdminApiTab('elevenlabs')" class="flex-1 text-[10px] font-bold py-1 text-slate-500 hover:text-slate-700 transition-all">ElevenLabs</button>
+                        </div>
+
+                        <textarea id="cartesia-api-input" 
+                            class="w-full bg-white/70 border border-indigo-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none h-20 custom-scrollbar" 
+                            placeholder="Cartesia API Keys (One per line)..."></textarea>
+                        
+                        <textarea id="elevenlabs-api-input" 
+                            class="w-full bg-white/70 border border-indigo-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none resize-none h-20 custom-scrollbar hidden" 
+                            placeholder="ElevenLabs API Keys (One per line)..."></textarea>
+                    </div>
+
+                    <!-- Voice Management -->
+                    <div id="admin-voice-box" class="api-box p-4 space-y-3 hidden">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-1.5">
+                                <i data-lucide="mic" class="w-4 h-4 text-indigo-600"></i>
+                                <h2 class="text-xs font-bold text-indigo-900 uppercase tracking-wider">Voices (Admin)</h2>
+                            </div>
+                        </div>
+
+                        <!-- Admin Voice Tabs -->
+                        <div class="flex gap-1 mb-1 bg-indigo-50 p-1 rounded-lg">
+                            <button id="voice-tab-cartesia" onclick="switchAdminVoiceTab('cartesia')" class="flex-1 text-[10px] font-bold py-1 rounded bg-white text-indigo-600 shadow-sm transition-all">Cartesia</button>
+                            <button id="voice-tab-elevenlabs" onclick="switchAdminVoiceTab('elevenlabs')" class="flex-1 text-[10px] font-bold py-1 text-slate-500 hover:text-slate-700 transition-all">ElevenLabs</button>
+                        </div>
+
+                        <div id="admin-voice-list" class="space-y-1.5 max-h-32 overflow-y-auto custom-scrollbar pr-1">
+                            <!-- dynamically loaded -->
+                        </div>
+
+                        <div class="space-y-1.5 pt-2 border-t border-indigo-100/50">
+                            <input type="hidden" id="edit-voice-original-uid">
+                            <input type="text" id="new-voice-name" placeholder="Voice Name (e.g. Bangla - Ruby)" class="w-full bg-white/70 border border-indigo-200 rounded-lg p-2 text-[11px] focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <input type="text" id="new-voice-id" placeholder="Voice ID (e.g. a1b2c...)" class="w-full bg-white/70 border border-indigo-200 rounded-lg p-2 text-[11px] focus:ring-2 focus:ring-indigo-500 outline-none">
+                            <div class="flex gap-1.5">
+                                <button onclick="saveVoice()" id="save-voice-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white text-[11px] font-bold py-2 rounded-lg transition-all shadow-sm">Add Voice</button>
+                                <button onclick="cancelEditVoice()" id="cancel-voice-btn" class="hidden bg-slate-200 hover:bg-slate-300 text-slate-700 text-[11px] font-bold py-2 px-2.5 rounded-lg transition-all shadow-sm">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </main>
+
+            <!-- Bottom Navigation Bar -->
+            <nav class="absolute bottom-0 left-0 right-0 h-16 bg-white border-t border-slate-200/80 flex justify-around items-center px-4 z-40 shadow-xl select-none shrink-0 rounded-t-[20px] md:rounded-b-none">
+                <button onclick="switchTab('script')" id="nav-btn-script" class="flex flex-col items-center justify-center flex-1 text-indigo-600 transition-all p-1">
+                    <i data-lucide="file-text" class="w-5 h-5 mb-0.5"></i>
+                    <span class="text-[9px] font-bold">Script</span>
+                </button>
+                <button onclick="switchTab('queue')" id="nav-btn-queue" class="flex flex-col items-center justify-center flex-1 text-slate-400 hover:text-slate-600 transition-all p-1">
+                    <i data-lucide="layers" class="w-5 h-5 mb-0.5"></i>
+                    <span class="text-[9px] font-bold">Queue</span>
+                </button>
+                <button onclick="switchTab('monitor')" id="nav-btn-monitor" class="flex flex-col items-center justify-center flex-1 text-slate-400 hover:text-slate-600 transition-all p-1">
+                    <i data-lucide="activity" class="w-5 h-5 mb-0.5"></i>
+                    <span class="text-[9px] font-bold">Monitor</span>
+                </button>
+                <button onclick="switchTab('admin')" id="nav-btn-admin" class="hidden flex flex-col items-center justify-center flex-1 text-slate-400 hover:text-slate-600 transition-all p-1">
+                    <i data-lucide="shield" class="w-5 h-5 mb-0.5"></i>
+                    <span class="text-[9px] font-bold">Admin</span>
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-20 left-1/2 -translate-x-1/2 z-[250] transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none w-11/12 max-w-xs">
+        <div class="bg-slate-900/95 text-white shadow-xl rounded-2xl p-3 flex items-center space-x-3 border border-slate-800">
+            <div id="toast-icon" class="p-1 bg-white/10 rounded-full"></div>
+            <p id="toast-msg" class="text-xs font-semibold"></p>
+        </div>
+    </div>
+
+    <!-- Firebase SDK & Application Logic as ES Module -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global Error Listeners
+        window.addEventListener('error', function(event) {
+            const consoleBox = document.getElementById('console-output');
+            if(consoleBox) writeToConsole(`System Error: ${event.message}`, 'error');
+        });
+
+        window.addEventListener('unhandledrejection', function(event) {
+            const consoleBox = document.getElementById('console-output');
+            if(consoleBox) {
+                let msg = event.reason && event.reason.message ? event.reason.message : event.reason;
+                writeToConsole(`Unexpected Issue: ${msg}`, 'error');
+            }
+        });
+
+        // Firebase Configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBR0Ej_IG9DIi0Nbk5yVk75dh0gYJNzxJ4",
+            authDomain: "motion-tts.firebaseapp.com",
+            projectId: "motion-tts",
+            storageBucket: "motion-tts.firebasestorage.app",
+            messagingSenderId: "1045325661437",
+            appId: "1:1045325661437:web:85a2392ce836ec8a362a94"
+        };
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'motion-tts-db';
+
+        let db = null;
+        let auth = null;
+        let configCollection = null;
+        let isFirebaseActive = false;
+        let configUnsubscribe = null;
+
+        // Global State variables
+        let cartesiaApiKeys = [];
+        let elevenLabsApiKeys = [];
+        
+        let cartesiaCurrentKeyIdx = 0;
+        let elevenLabsCurrentKeyIdx = 0;
+
+        let cartesiaExhaustedKeys = new Set();
+        let elevenLabsExhaustedKeys = new Set();
+
+        let currentProvider = 'cartesia'; // 'cartesia' or 'elevenlabs'
+        let adminApiTab = 'cartesia';
+        let adminVoiceTab = 'cartesia';
+
+        let segments = [];
+        let isProcessing = false;
+        let selectedEmotion = "Neutral";
+        let abortController = null;
+        let renderFrameId = null;
+        let currentUserRole = 'user';
+        let currentUsername = '';
+        let isOfflineAdmin = false;
+
+        let cartesiaVoices = [
+            { uid: "c-uid-1", id: "2ba861ea-7cdc-43d1-8608-4045b5a41de5", name: "Bangla - Rubel (Male)" },
+            { uid: "c-uid-2", id: "0f14d8cb-f039-41fe-a813-a9b4bee7eed8", name: "Bangla - Nisha (Female)" }
+        ];
+
+        let elevenLabsVoices = [
+            { uid: "el-uid-1", id: "21m00Tcm4TlvDq8ikWAM", name: "Rachel (Female Default)" },
+            { uid: "el-uid-2", id: "pNInz6obpgDQGcFmaJgB", name: "Adam (Male Default)" }
+        ];
+
+        const EMOTIONS = ["Neutral", "Happy", "Serious", "Calm", "Energetic", "Whispering"];
+
+        function getCurrentApiKeys() { return currentProvider === 'cartesia' ? cartesiaApiKeys : elevenLabsApiKeys; }
+        function getCurrentExhaustedKeys() { return currentProvider === 'cartesia' ? cartesiaExhaustedKeys : elevenLabsExhaustedKeys; }
+        function getCurrentVoices() { return currentProvider === 'cartesia' ? cartesiaVoices : elevenLabsVoices; }
+        function getAdminVoices() { return adminVoiceTab === 'cartesia' ? cartesiaVoices : elevenLabsVoices; }
+
+        // Custom Android Tab Switch System
+        window.switchTab = function(tabId) {
+            document.querySelectorAll('.app-tab-content').forEach(el => el.classList.remove('active'));
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+            
+            // Adjust Bottom Navigation Bar State
+            document.querySelectorAll('nav button').forEach(btn => {
+                btn.classList.replace('text-indigo-600', 'text-slate-400');
+                btn.classList.add('hover:text-slate-600');
+            });
+            const activeBtn = document.getElementById(`nav-btn-${tabId}`);
+            if(activeBtn) {
+                activeBtn.classList.replace('text-slate-400', 'text-indigo-600');
+                activeBtn.classList.remove('hover:text-slate-600');
+            }
+        };
+
+        window.handleProviderChange = function() {
+            currentProvider = document.getElementById('provider-select').value;
+            
+            // Toggle Specific Settings
+            if (currentProvider === 'cartesia') {
+                document.getElementById('cartesia-controls').classList.remove('hidden');
+                document.getElementById('elevenlabs-controls').classList.add('hidden');
+                document.getElementById('status-provider-badge').textContent = 'Cartesia';
+            } else {
+                document.getElementById('cartesia-controls').classList.add('hidden');
+                document.getElementById('elevenlabs-controls').classList.remove('hidden');
+                document.getElementById('status-provider-badge').textContent = 'ElevenLabs';
+            }
+            
+            renderVoices();
+            updateKeyStats();
+            handleSettingsChange();
+            writeToConsole(`Provider changed to: ${currentProvider === 'cartesia' ? 'Cartesia AI' : 'ElevenLabs'}`, 'system');
+        }
+
+        window.switchAdminApiTab = function(tab) {
+            adminApiTab = tab;
+            const btnCartesia = document.getElementById('api-tab-cartesia');
+            const btnEleven = document.getElementById('api-tab-elevenlabs');
+            const inputCartesia = document.getElementById('cartesia-api-input');
+            const inputEleven = document.getElementById('elevenlabs-api-input');
+
+            if (tab === 'cartesia') {
+                btnCartesia.className = "flex-1 text-[10px] font-bold py-1 rounded bg-white text-indigo-600 shadow-sm transition-all";
+                btnEleven.className = "flex-1 text-[10px] font-bold py-1 text-slate-500 hover:text-slate-700 transition-all";
+                inputCartesia.classList.remove('hidden');
+                inputEleven.classList.add('hidden');
+            } else {
+                btnEleven.className = "flex-1 text-[10px] font-bold py-1 rounded bg-white text-indigo-600 shadow-sm transition-all";
+                btnCartesia.className = "flex-1 text-[10px] font-bold py-1 text-slate-500 hover:text-slate-700 transition-all";
+                inputEleven.classList.remove('hidden');
+                inputCartesia.classList.add('hidden');
+            }
+        }
+
+        window.switchAdminVoiceTab = function(tab) {
+            adminVoiceTab = tab;
+            const btnCartesia = document.getElementById('voice-tab-cartesia');
+            const btnEleven = document.getElementById('voice-tab-elevenlabs');
+
+            if (tab === 'cartesia') {
+                btnCartesia.className = "flex-1 text-[10px] font-bold py-1 rounded bg-white text-indigo-600 shadow-sm transition-all";
+                btnEleven.className = "flex-1 text-[10px] font-bold py-1 text-slate-500 hover:text-slate-700 transition-all";
+            } else {
+                btnEleven.className = "flex-1 text-[10px] font-bold py-1 rounded bg-white text-indigo-600 shadow-sm transition-all";
+                btnCartesia.className = "flex-1 text-[10px] font-bold py-1 text-slate-500 hover:text-slate-700 transition-all";
+            }
+            renderAdminVoices();
+        }
+
+        function renderVoices() {
+            const activeVoices = getCurrentVoices();
+            const select = document.getElementById('voice-id-input');
+            if (select) {
+                const currentVal = select.value;
+                select.innerHTML = '';
+                activeVoices.forEach(v => {
+                    const opt = document.createElement('option');
+                    opt.value = v.uid; opt.textContent = v.name;
+                    select.appendChild(opt);
+                });
+                if (currentVal && activeVoices.some(v => v.uid === currentVal)) select.value = currentVal;
+                else if (activeVoices.length > 0) select.value = activeVoices[0].uid;
+            }
+            renderAdminVoices();
+        }
+
+        function renderAdminVoices() {
+            const adminList = document.getElementById('admin-voice-list');
+            if (!adminList) return;
+            const voices = getAdminVoices();
+            
+            adminList.innerHTML = '';
+            if (voices.length === 0) {
+                adminList.innerHTML = '<div class="text-[10px] text-slate-400 text-center py-2">No voices available</div>';
+            }
+            voices.forEach(v => {
+                const div = document.createElement('div');
+                div.className = "flex justify-between items-center bg-white/60 p-2.5 rounded-lg border border-indigo-50 hover:border-indigo-100 transition-colors shadow-sm";
+                div.innerHTML = `
+                    <div class="truncate pr-2">
+                        <div class="text-[10px] font-bold text-slate-700 truncate">${v.name}</div>
+                        <div class="text-[8px] text-indigo-400 font-mono truncate">${v.id}</div>
+                    </div>
+                    <div class="flex gap-1.5 flex-shrink-0">
+                        <button type="button" onclick="editVoice('${v.uid}')" title="Edit" class="p-1.5 text-indigo-500 bg-indigo-50 hover:bg-indigo-600 hover:text-white rounded-md transition-colors"><i data-lucide="edit-2" class="w-3 h-3"></i></button>
+                        <button type="button" onclick="deleteVoice('${v.uid}')" title="Delete" class="p-1.5 text-red-500 bg-red-50 hover:bg-red-600 hover:text-white rounded-md transition-colors"><i data-lucide="trash-2" class="w-3 h-3"></i></button>
+                    </div>
+                `;
+                adminList.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        async function syncVoices() {
+            if (isFirebaseActive && configCollection && currentUserRole === 'admin') {
+                try { 
+                    await setDoc(doc(configCollection, 'global'), { cartesiaVoices, elevenLabsVoices }, { merge: true }); 
+                } catch (e) { writeToConsole("Failed to sync voices.", "error"); }
+            } else {
+                localStorage.setItem('motion_tts_cartesia_voices', JSON.stringify(cartesiaVoices));
+                localStorage.setItem('motion_tts_elevenlabs_voices', JSON.stringify(elevenLabsVoices));
+            }
+            renderVoices();
+        }
+
+        window.saveVoice = async function() {
+            const nameInput = document.getElementById('new-voice-name').value.trim();
+            const idInput = document.getElementById('new-voice-id').value.trim();
+            const origUid = document.getElementById('edit-voice-original-uid').value;
+
+            if (!nameInput || !idInput) return toast("Please enter name and ID!", "error");
+
+            let targetArray = adminVoiceTab === 'cartesia' ? cartesiaVoices : elevenLabsVoices;
+
+            if (origUid) {
+                const idx = targetArray.findIndex(v => v.uid === origUid);
+                if (idx > -1) {
+                    targetArray[idx] = { ...targetArray[idx], id: idInput, name: nameInput };
+                    toast("Voice updated successfully!", "success");
+                }
+            } else {
+                targetArray.push({ uid: crypto.randomUUID(), id: idInput, name: nameInput });
+                toast("New voice added successfully!", "success");
+            }
+            window.cancelEditVoice();
+            await syncVoices();
+        };
+
+        window.editVoice = function(uid) {
+            const targetArray = adminVoiceTab === 'cartesia' ? cartesiaVoices : elevenLabsVoices;
+            const v = targetArray.find(v => v.uid === uid);
+            if (v) {
+                document.getElementById('new-voice-name').value = v.name;
+                document.getElementById('new-voice-id').value = v.id;
+                document.getElementById('edit-voice-original-uid').value = v.uid;
+                document.getElementById('save-voice-btn').textContent = "Update";
+                document.getElementById('save-voice-btn').classList.replace('bg-indigo-600', 'bg-emerald-600');
+                document.getElementById('save-voice-btn').classList.replace('hover:bg-indigo-700', 'hover:bg-emerald-700');
+                document.getElementById('cancel-voice-btn').classList.remove('hidden');
+            }
+        };
+
+        window.cancelEditVoice = function() {
+            document.getElementById('new-voice-name').value = '';
+            document.getElementById('new-voice-id').value = '';
+            document.getElementById('edit-voice-original-uid').value = '';
+            document.getElementById('save-voice-btn').textContent = "Add Voice";
+            document.getElementById('save-voice-btn').classList.replace('bg-emerald-600', 'bg-indigo-600');
+            document.getElementById('save-voice-btn').classList.replace('hover:bg-emerald-700', 'hover:bg-indigo-700');
+            document.getElementById('cancel-voice-btn').classList.add('hidden');
+        };
+
+        window.deleteVoice = async function(uid) {
+            if (adminVoiceTab === 'cartesia') {
+                cartesiaVoices = cartesiaVoices.filter(v => v.uid !== uid);
+            } else {
+                elevenLabsVoices = elevenLabsVoices.filter(v => v.uid !== uid);
+            }
+            toast("Voice deleted!", "info");
+            await syncVoices();
+        };
+
+        async function initFirebase() {
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                configCollection = collection(db, 'artifacts', appId, 'public', 'data', 'config');
+                isFirebaseActive = true;
+            } catch(e) {
+                toast("Database connection failed.", "error");
+            }
+        }
+
+        window.initApp = async function() {
+            lucide.createIcons();
+            await initFirebase();
+            
+            const cVoices = localStorage.getItem('motion_tts_cartesia_voices');
+            const elVoices = localStorage.getItem('motion_tts_elevenlabs_voices');
+            if (!isFirebaseActive) {
+                if (cVoices) try { cartesiaVoices = JSON.parse(cVoices); } catch(e){}
+                if (elVoices) try { elevenLabsVoices = JSON.parse(elVoices); } catch(e){}
+            }
+            
+            populateEmotions();
+            loadSettings();
+            renderVoices();
+            
+            document.getElementById('cartesia-api-input').addEventListener('input', handleSettingsChange);
+            document.getElementById('elevenlabs-api-input').addEventListener('input', handleSettingsChange);
+
+            if (isFirebaseActive) {
+                onAuthStateChanged(auth, (user) => {
+                    if (isOfflineAdmin) return;
+                    
+                    if (user) {
+                        currentUsername = user.email;
+                        currentUserRole = (user.email === 'contactemonmiah@gmail.com') ? 'admin' : 'user';
+                        document.getElementById('login-overlay').classList.add('hidden');
+                        showApp();
+                    } else {
+                        document.getElementById('login-overlay').classList.remove('hidden');
+                        document.getElementById('app').classList.add('opacity-0');
+                    }
+                });
+            }
+        };
+
+        window.handleLogin = async function(e) {
+            e.preventDefault();
+            const email = document.getElementById('email').value.trim();
+            const pass = document.getElementById('password').value;
+            const btn = document.getElementById('login-btn');
+            
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> <span>Logging in...</span>';
+            lucide.createIcons();
+
+            if (email === 'contactemonmiah@gmail.com' && pass === 'MHem12@#') {
+                isOfflineAdmin = true;
+                currentUsername = email;
+                currentUserRole = 'admin';
+                document.getElementById('login-error').classList.add('hidden');
+                document.getElementById('login-overlay').classList.add('hidden');
+                
+                showApp();
+                toast(`Welcome Admin! (Offline Access)`, "success");
+                
+                btn.innerHTML = '<span>Sign In</span><i data-lucide="arrow-right" class="w-4 h-4"></i>';
+                lucide.createIcons();
+                return;
+            }
+
+            if (isFirebaseActive) {
+                try {
+                    await signInWithEmailAndPassword(auth, email, pass);
+                    toast(`Welcome, ${email}!`, "success");
+                    document.getElementById('login-error').classList.add('hidden');
+                } catch(err) {
+                    let errorMsg = 'Login failed!';
+                    if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') errorMsg = 'Invalid email or password!';
+                    else if (err.code === 'auth/invalid-email') errorMsg = 'Invalid email address!';
+                    else if (err.code === 'auth/too-many-requests') errorMsg = 'Too many requests. Please try again later.';
+                    showAuthError('login-error', errorMsg);
+                }
+            } else {
+                showAuthError('login-error', 'Database is not connected!');
+            }
+
+            btn.innerHTML = '<span>Sign In</span><i data-lucide="arrow-right" class="w-4 h-4"></i>';
+            lucide.createIcons();
+        };
+
+        function showAuthError(elementId, msg) {
+            const errBox = document.getElementById(elementId);
+            errBox.textContent = msg;
+            errBox.classList.remove('hidden');
+            const form = errBox.parentElement;
+            form.classList.add('animate-pulse');
+            setTimeout(() => form.classList.remove('animate-pulse'), 500);
+        }
+
+        window.handleLogout = async function() {
+            if (configUnsubscribe) configUnsubscribe();
+            isOfflineAdmin = false;
+            
+            try {
+                await signOut(auth);
+                document.getElementById('password').value = '';
+                toast("Logged out successfully.");
+            } catch (err) {
+                document.getElementById('password').value = '';
+                document.getElementById('login-overlay').classList.remove('hidden');
+                document.getElementById('app').classList.add('opacity-0');
+                toast("Logged out successfully.");
+            }
+        };
+
+        function showApp() {
+            document.getElementById('user-badge').textContent = currentUsername;
+
+            if (currentUserRole === 'admin') {
+                document.getElementById('admin-api-box').classList.remove('hidden');
+                document.getElementById('admin-voice-box').classList.remove('hidden');
+                document.getElementById('nav-btn-admin').classList.remove('hidden');
+            } else {
+                document.getElementById('admin-api-box').classList.add('hidden');
+                document.getElementById('admin-voice-box').classList.add('hidden');
+                document.getElementById('nav-btn-admin').classList.add('hidden');
+            }
+            
+            if (isFirebaseActive && configCollection) {
+                if (configUnsubscribe) configUnsubscribe();
+                configUnsubscribe = onSnapshot(doc(configCollection, 'global'), (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        
+                        // Parse Cartesia Keys
+                        if (data.cartesiaApiKeysRaw !== undefined || data.apiKeysRaw !== undefined) {
+                            const raw = data.cartesiaApiKeysRaw || data.apiKeysRaw;
+                            cartesiaApiKeys = raw.split('\n').map(k => k.trim()).filter(k => k !== "");
+                            if (currentUserRole === 'admin') document.getElementById('cartesia-api-input').value = raw;
+                        }
+                        // Parse ElevenLabs Keys
+                        if (data.elevenLabsApiKeysRaw !== undefined) {
+                            elevenLabsApiKeys = data.elevenLabsApiKeysRaw.split('\n').map(k => k.trim()).filter(k => k !== "");
+                            if (currentUserRole === 'admin') document.getElementById('elevenlabs-api-input').value = data.elevenLabsApiKeysRaw;
+                        }
+                        // Parse Voices
+                        if (data.cartesiaVoices) cartesiaVoices = data.cartesiaVoices;
+                        else if (data.voices) cartesiaVoices = data.voices; // legacy compatibility
+                        
+                        if (data.elevenLabsVoices) elevenLabsVoices = data.elevenLabsVoices;
+
+                        updateKeyStats();
+                        renderVoices();
+                    }
+                });
+            }
+
+            setTimeout(() => { 
+                document.getElementById('app').classList.remove('opacity-0'); 
+                if (isFirebaseActive) writeToConsole("Firebase system connected successfully.", "success");
+            }, 100);
+        }
+
+        function writeToConsole(message, type = 'info') {
+            const consoleBox = document.getElementById('console-output');
+            if(!consoleBox) return;
+            const time = new Date().toLocaleTimeString();
+            const logDiv = document.createElement('div');
+            let color = 'text-slate-400';
+            if (type === 'error') color = 'text-red-400 font-semibold';
+            if (type === 'success') color = 'text-emerald-400 font-bold';
+            if (type === 'warning') color = 'text-amber-400';
+            if (type === 'system') color = 'text-indigo-400';
+            logDiv.className = `console-log ${color}`;
+            logDiv.innerHTML = `<span class="text-slate-600 font-normal">[${time}]</span> ${message}`;
+            consoleBox.appendChild(logDiv);
+            consoleBox.scrollTop = consoleBox.scrollHeight;
+        }
+
+        function updateLiveTracker(chunkIdx, keyIdx, status) {
+            const trackerList = document.getElementById('live-tracker-list');
+            if(!trackerList) return;
+            
+            if(trackerList.innerHTML.includes('&gt; Waiting...')) {
+                trackerList.innerHTML = '';
+            }
+
+            const id = `track-chunk-${chunkIdx}`;
+            let el = document.getElementById(id);
+            if (!el) {
+                el = document.createElement('div');
+                el.id = id;
+                el.className = "p-1.5 rounded-lg border border-slate-800 bg-slate-900/50 transition-colors font-mono text-[9px]";
+                trackerList.prepend(el);
+            }
+
+            const prefix = currentProvider === 'cartesia' ? 'Car-Key' : 'EL-Key';
+
+            if (status === 'generating') {
+                el.innerHTML = `<span class="text-amber-400 font-bold animate-pulse">●</span> <span class="text-slate-300">Part #${chunkIdx + 1}</span> <span class="text-indigo-400 font-bold">[${prefix} #${keyIdx + 1}]</span>`;
+                el.className = "p-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 transition-colors font-mono text-[9px]";
+            } else if (status === 'done') {
+                el.innerHTML = `<span class="text-emerald-400 font-bold">✔</span> <span class="text-slate-300">Part #${chunkIdx + 1}</span> <span class="text-emerald-400/75 font-bold">[${prefix} #${keyIdx + 1}]</span>`;
+                el.className = "p-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 transition-colors font-mono text-[9px]";
+            } else if (status === 'error') {
+                el.innerHTML = `<span class="text-red-400 font-bold">✖</span> <span class="text-slate-300">Part #${chunkIdx + 1}</span> <span class="text-red-400/75 font-bold">[${prefix} #${keyIdx + 1}]</span>`;
+                el.className = "p-1.5 rounded-lg border border-red-500/30 bg-red-500/10 transition-colors font-mono text-[9px]";
+            }
+
+            while(trackerList.children.length > 5) {
+                trackerList.removeChild(trackerList.lastChild);
+            }
+        }
+
+        function populateEmotions() {
+            const emoContainer = document.getElementById('emotion-tags');
+            EMOTIONS.forEach(emo => {
+                const btn = document.createElement('button');
+                btn.id = `emo-btn-${emo}`;
+                btn.className = `px-3 py-1.5 text-[10px] font-bold rounded-xl border transition-all ${emo === 'Neutral' ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`;
+                btn.textContent = emo;
+                btn.onclick = () => { selectedEmotion = emo; updateEmotionUI(); handleSettingsChange(); };
+                emoContainer.appendChild(btn);
+            });
+        }
+
+        function updateEmotionUI() {
+            Array.from(document.getElementById('emotion-tags').children).forEach(b => {
+                b.className = 'px-3 py-1.5 text-[10px] font-bold rounded-xl border transition-all bg-white text-slate-600 border-slate-200 hover:border-indigo-300';
+            });
+            const activeBtn = document.getElementById(`emo-btn-${selectedEmotion}`);
+            if (activeBtn) activeBtn.className = 'px-3 py-1.5 text-[10px] font-bold rounded-xl border transition-all bg-indigo-600 text-white border-indigo-600 shadow-sm';
+        }
+
+        window.handleSettingsChange = function() {
+            // BUG RESOLVED: For standard users, Admin API inputs are hidden (or empty in DOM).
+            // We must ONLY read and parse raw text area values if the user actually is an admin
+            // and has entered something, protecting previously fetched Firebase API Keys.
+            let cartesiaRaw = "";
+            let elevenLabsRaw = "";
+
+            const cartInput = document.getElementById('cartesia-api-input');
+            const elInput = document.getElementById('elevenlabs-api-input');
+
+            if (currentUserRole === 'admin') {
+                cartesiaRaw = cartInput ? cartInput.value : "";
+                elevenLabsRaw = elInput ? elInput.value : "";
+                
+                cartesiaApiKeys = cartesiaRaw.split('\n').map(k => k.trim()).filter(k => k !== "");
+                elevenLabsApiKeys = elevenLabsRaw.split('\n').map(k => k.trim()).filter(k => k !== "");
+            } else {
+                // For normal users, keep the loaded keys intact
+                // Just map back raw values from existing parsed arrays to save securely
+                cartesiaRaw = cartesiaApiKeys.join('\n');
+                elevenLabsRaw = elevenLabsApiKeys.join('\n');
+            }
+
+            updateKeyStats();
+            
+            const settings = {
+                provider: currentProvider,
+                cartesiaApiKeysRaw: cartesiaRaw,
+                elevenLabsApiKeysRaw: elevenLabsRaw,
+                voiceUid: document.getElementById('voice-id-input').value,
+                speed: document.getElementById('speed-select').value,
+                pitch: document.getElementById('pitch-select').value,
+                emotion: selectedEmotion
+            };
+            localStorage.setItem('motion_tts_settings', JSON.stringify(settings));
+
+            if (currentUserRole === 'admin' && isFirebaseActive && configCollection) {
+                setDoc(doc(configCollection, 'global'), { 
+                    cartesiaApiKeysRaw: cartesiaRaw,
+                    elevenLabsApiKeysRaw: elevenLabsRaw 
+                }, { merge: true })
+                    .catch(e => { writeToConsole("Failed to sync admin settings.", "error"); });
+            }
+            updateStartButtonText();
+        }
+
+        function updateKeyStats() {
+            const keys = getCurrentApiKeys();
+            const exhausted = getCurrentExhaustedKeys();
+            
+            let activeCount = 0, exhaustedCount = 0;
+            keys.forEach(k => { exhausted.has(k) ? exhaustedCount++ : activeCount++; });
+            
+            const apiCountEl = document.getElementById('api-count');
+            if(apiCountEl) apiCountEl.textContent = `${keys.length} Keys`;
+
+            document.getElementById('stat-total').textContent = keys.length;
+            document.getElementById('stat-active').textContent = activeCount;
+            document.getElementById('stat-dead').textContent = exhaustedCount;
+        }
+
+        function resetExhaustedKeysSilent() {
+            if(currentProvider === 'cartesia') {
+                cartesiaExhaustedKeys.clear();
+                localStorage.setItem('motion_tts_cartesia_exhausted', JSON.stringify([]));
+            } else {
+                elevenLabsExhaustedKeys.clear();
+                localStorage.setItem('motion_tts_elevenlabs_exhausted', JSON.stringify([]));
+            }
+            updateKeyStats();
+            writeToConsole(`${currentProvider} API key cycle auto-reset completed.`, "system");
+        }
+
+        function loadSettings() {
+            const saved = localStorage.getItem('motion_tts_settings') || localStorage.getItem('motion_tts_cartesia_settings'); // legacy fallback
+            const cartExhausted = localStorage.getItem('motion_tts_cartesia_exhausted');
+            const elExhausted = localStorage.getItem('motion_tts_elevenlabs_exhausted');
+            
+            if (cartExhausted) { try { cartesiaExhaustedKeys = new Set(JSON.parse(cartExhausted)); } catch (e) { } }
+            if (elExhausted) { try { elevenLabsExhaustedKeys = new Set(JSON.parse(elExhausted)); } catch (e) { } }
+            
+            cartesiaCurrentKeyIdx = parseInt(localStorage.getItem('motion_tts_cartesia_idx'), 10) || 0;
+            elevenLabsCurrentKeyIdx = parseInt(localStorage.getItem('motion_tts_elevenlabs_idx'), 10) || 0;
+
+            if (saved) {
+                const s = JSON.parse(saved);
+                
+                if (s.provider && (s.provider === 'cartesia' || s.provider === 'elevenlabs')) {
+                    document.getElementById('provider-select').value = s.provider;
+                    handleProviderChange(); // sets currentProvider
+                }
+
+                if (s.cartesiaApiKeysRaw || s.apiKeysRaw) {
+                    cartesiaApiKeys = (s.cartesiaApiKeysRaw || s.apiKeysRaw || "").split('\n').map(k => k.trim()).filter(k => k !== "");
+                    if(currentUserRole === 'admin' && document.getElementById('cartesia-api-input')) {
+                        document.getElementById('cartesia-api-input').value = s.cartesiaApiKeysRaw || s.apiKeysRaw;
+                    }
+                }
+                
+                if (s.elevenLabsApiKeysRaw) {
+                    elevenLabsApiKeys = (s.elevenLabsApiKeysRaw || "").split('\n').map(k => k.trim()).filter(k => k !== "");
+                    if(currentUserRole === 'admin' && document.getElementById('elevenlabs-api-input')) {
+                        document.getElementById('elevenlabs-api-input').value = s.elevenLabsApiKeysRaw;
+                    }
+                }
+                
+                const voiceSelect = document.getElementById('voice-id-input');
+                // Ensure voices are rendered before setting value
+                renderVoices();
+                if (s.voiceUid && Array.from(voiceSelect.options).some(opt => opt.value === s.voiceUid)) {
+                    voiceSelect.value = s.voiceUid;
+                }
+                
+                if (s.speed) document.getElementById('speed-select').value = s.speed;
+                if (s.pitch) document.getElementById('pitch-select').value = s.pitch;
+                if (s.emotion) selectedEmotion = s.emotion;
+                
+                updateKeyStats(); 
+                updateEmotionUI();
+            } else { updateKeyStats(); }
+        }
+
+        function toast(msg, type = 'info') {
+            const t = document.getElementById('toast');
+            const m = document.getElementById('toast-msg');
+            const i = document.getElementById('toast-icon');
+            m.textContent = msg;
+            i.innerHTML = type === 'error' ? '<i data-lucide="alert-circle" class="w-4 h-4 text-red-400"></i>' : '<i data-lucide="check-circle" class="w-4 h-4 text-emerald-400"></i>';
+            lucide.createIcons();
+            t.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 4000);
+            
+            if(type === 'error') writeToConsole(`Error: ${msg}`, 'error');
+        }
+
+        window.handleSplit = function() {
+            let text = document.getElementById('script-input').value.trim();
+            const charLimit = 1000; 
+            if (!text) return toast("Please enter a script!", "error");
+
+            segments = [];
+            while (text.length > 0) {
+                if (text.length <= charLimit) {
+                    segments.push({ text: text, status: 'pending', blob: null, pcm: null, rate: null, usedKeyIndex: null });
+                    break;
+                }
+                let sub = text.substring(0, charLimit);
+                const lastSentenceEnd = Math.max(sub.lastIndexOf('।'), sub.lastIndexOf('.'), sub.lastIndexOf('?'), sub.lastIndexOf('!'));
+                let splitIndex = (lastSentenceEnd !== -1) ? lastSentenceEnd + 1 : ((sub.lastIndexOf(' ') !== -1) ? sub.lastIndexOf(' ') : charLimit);
+                const chunk = text.substring(0, splitIndex).trim();
+                if (chunk) segments.push({ text: chunk, status: 'pending', blob: null, pcm: null, rate: null, usedKeyIndex: null });
+                text = text.substring(splitIndex).trim();
+            }
+            renderSegments();
+            document.getElementById('start-btn').classList.remove('hidden');
+            updateStartButtonText();
+            
+            document.getElementById('live-tracker-list').innerHTML = '<div class="text-slate-600 text-center py-2 italic text-[11px]">&gt; Waiting...</div>';
+            
+            writeToConsole(`Script successfully split into ${segments.length} segments.`, 'system');
+            toast(`${segments.length} segments created.`);
+            
+            // Auto switch to Queue tab on split
+            switchTab('queue');
+        };
+
+        function renderSegments() {
+            if (renderFrameId) cancelAnimationFrame(renderFrameId);
+            renderFrameId = requestAnimationFrame(() => {
+                const container = document.getElementById('segments-container');
+                container.innerHTML = "";
+                segments.forEach((s, i) => {
+                    const div = document.createElement('div');
+                    div.className = `p-4 rounded-2xl border flex flex-col space-y-2 bg-white transition-all ${s.status === 'generating' ? 'border-indigo-400 shadow-md' : s.status === 'error' ? 'border-red-300 bg-red-50' : 'border-slate-100 hover:border-slate-200'}`;
+                    const icon = s.status === 'done' ? 'check-circle' : s.status === 'generating' ? 'loader-2' : s.status === 'error' ? 'alert-octagon' : 'circle';
+                    const spin = s.status === 'generating' ? 'animate-spin text-indigo-500' : s.status === 'done' ? 'text-emerald-500' : s.status === 'error' ? 'text-red-500' : 'text-slate-300';
+                    let subtitle = `<span class="text-[9px] font-bold text-slate-400 uppercase">${s.status === 'pending' ? 'Pending' : s.status}</span>`;
+                    if (s.status === 'generating') subtitle = `<span class="text-[9px] font-bold text-indigo-500 uppercase animate-pulse">Generating...</span>`;
+                    else if (s.status === 'done' && s.usedKeyIndex !== null) subtitle = `<span class="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">API #${s.usedKeyIndex + 1}</span>`;
+
+                    div.innerHTML = `
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <i data-lucide="${icon}" class="${spin} w-4 h-4"></i>
+                                <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Part ${i + 1}</span>
+                            </div>
+                            <span class="text-[9px] font-bold text-indigo-400">${s.text.length} Chars</span>
+                        </div>
+                        <p class="text-xs text-slate-600 italic line-clamp-2">"${s.text}"</p>
+                        <div class="flex items-center justify-between pt-1 border-t border-slate-50">
+                            <div class="flex-1 max-w-[200px]">
+                                ${s.status === 'done' ? `<audio controls class="h-6 w-full" src="${URL.createObjectURL(s.blob)}"></audio>` : ''}
+                            </div>
+                            ${subtitle}
+                        </div>
+                    `;
+                    container.appendChild(div);
+                });
+                lucide.createIcons();
+                updateProgress();
+            });
+        }
+
+        function updateProgress() {
+            const done = segments.filter(s => s.status === 'done').length;
+            const pct = segments.length ? Math.round((done / segments.length) * 100) : 0;
+            document.getElementById('progress-bar').style.width = pct + '%';
+            document.getElementById('progress-text').textContent = pct + '% Completed';
+            
+            if (!segments.some(s => s.status === 'pending' || s.status === 'generating') && segments.length > 0) {
+                document.getElementById('queue-actions').classList.remove('hidden');
+            } else {
+                document.getElementById('queue-actions').classList.add('hidden');
+            }
+            updateStartButtonText();
+        }
+
+        function updateStartButtonText() {
+            const startBtn = document.getElementById('start-btn');
+            if (!startBtn) return;
+            if (isProcessing) {
+                startBtn.innerHTML = '<i data-lucide="square" class="w-4 h-4"></i><span>Stop Generation</span>';
+                startBtn.className = "android-btn w-full flex items-center justify-center space-x-2 py-3 bg-red-600 text-white text-xs font-bold rounded-2xl hover:bg-red-700 transition shadow-lg";
+            } else {
+                const doneCount = segments.filter(s => s.status === 'done').length;
+                if (doneCount > 0 && doneCount < segments.length) {
+                    startBtn.innerHTML = '<i data-lucide="play-circle" class="w-4 h-4"></i><span>Generate Remaining</span>';
+                    startBtn.className = "android-btn w-full flex items-center justify-center space-x-2 py-3 bg-indigo-600 text-white text-xs font-bold rounded-2xl hover:bg-indigo-700 transition shadow-lg animate-pulse";
+                } else if (doneCount === segments.length && segments.length > 0) {
+                    startBtn.innerHTML = '<i data-lucide="rotate-ccw" class="w-4 h-4"></i><span>Regenerate</span>';
+                    startBtn.className = "android-btn w-full flex items-center justify-center space-x-2 py-3 bg-slate-600 text-white text-xs font-bold rounded-2xl hover:bg-slate-700 transition shadow-lg";
+                } else {
+                    startBtn.innerHTML = '<i data-lucide="play-circle" class="w-4 h-4"></i><span>Start Generation</span>';
+                    startBtn.className = "android-btn w-full flex items-center justify-center space-x-2 py-3 bg-emerald-600 text-white text-xs font-bold rounded-2xl hover:bg-emerald-700 transition shadow-lg";
+                }
+            }
+            lucide.createIcons();
+        }
+
+        async function processSingleSegment(idx, initialKeyIdx, signal) {
+            let success = false;
+            let keys = getCurrentApiKeys();
+            let exhausted = getCurrentExhaustedKeys();
+            let totalAvailableKeys = keys.length;
+
+            if (totalAvailableKeys > 0 && exhausted.size >= totalAvailableKeys) resetExhaustedKeysSilent();
+
+            for (let i = 0; i < totalAvailableKeys; i++) {
+                if (signal.aborted) { segments[idx].status = 'pending'; renderSegments(); return; }
+                const keyIndex = (initialKeyIdx + i) % totalAvailableKeys;
+                const key = keys[keyIndex];
+
+                if (exhausted.has(key)) continue;
+
+                updateLiveTracker(idx, keyIndex, 'generating');
+
+                try {
+                    let res;
+                    if (currentProvider === 'cartesia') {
+                        res = await fetchCartesiaTTS(segments[idx].text, key, signal);
+                        segments[idx].blob = pcmToWav(res.pcm, res.rate);
+                        segments[idx].pcm = res.pcm;
+                        segments[idx].rate = res.rate;
+                    } else {
+                        res = await fetchElevenLabsTTS(segments[idx].text, key, signal);
+                        segments[idx].blob = res.blob;
+                        segments[idx].pcm = null;
+                        segments[idx].rate = null;
+                    }
+
+                    segments[idx].status = 'done';
+                    segments[idx].usedKeyIndex = keyIndex;
+                    success = true;
+                    
+                    updateLiveTracker(idx, keyIndex, 'done');
+                    
+                    if (currentProvider === 'cartesia') {
+                        cartesiaCurrentKeyIdx = (keyIndex + 1) % totalAvailableKeys;
+                        localStorage.setItem('motion_tts_cartesia_idx', cartesiaCurrentKeyIdx);
+                    } else {
+                        elevenLabsCurrentKeyIdx = (keyIndex + 1) % totalAvailableKeys;
+                        localStorage.setItem('motion_tts_elevenlabs_idx', elevenLabsCurrentKeyIdx);
+                    }
+                    break; 
+                } catch (e) {
+                    if (e.name === 'AbortError') { segments[idx].status = 'pending'; renderSegments(); throw e; }
+                    exhausted.add(key);
+                    
+                    if (currentProvider === 'cartesia') {
+                        localStorage.setItem('motion_tts_cartesia_exhausted', JSON.stringify(Array.from(exhausted)));
+                    } else {
+                        localStorage.setItem('motion_tts_elevenlabs_exhausted', JSON.stringify(Array.from(exhausted)));
+                    }
+
+                    updateKeyStats();
+                    updateLiveTracker(idx, keyIndex, 'error');
+                }
+            }
+            if (!success && !signal.aborted) {
+                segments[idx].status = 'error'; 
+                writeToConsole(`Part ${idx + 1} failed! No active ${currentProvider} API Key found.`, 'error');
+            }
+            renderSegments(); 
+        }
+
+        window.toggleProcessing = async function() {
+            let keys = getCurrentApiKeys();
+            if (keys.length === 0) return toast("No active API Key found! Please ask admin to add keys.", "error");
+            
+            if (isProcessing) {
+                abortController.abort();
+                isProcessing = false;
+                segments.forEach(s => { if (s.status === 'generating') s.status = 'pending'; });
+                renderSegments();
+                return;
+            }
+            
+            isProcessing = true;
+            abortController = new AbortController();
+            updateStartButtonText();
+            document.getElementById('live-tracker-list').innerHTML = '';
+
+            const doneCount = segments.filter(s => s.status === 'done').length;
+            if (doneCount === segments.length && segments.length > 0) {
+                segments.forEach(s => { s.status = 'pending'; s.blob = null; s.pcm = null; s.rate = null; s.usedKeyIndex = null; });
+            }
+
+            const tasks = [];
+            segments.forEach((s, idx) => {
+                if (s.status === 'pending' || s.status === 'error' || s.status === 'generating') {
+                    s.status = 'generating';
+                    tasks.push(idx);
+                }
+            });
+            renderSegments();
+
+            if (tasks.length === 0) { isProcessing = false; updateStartButtonText(); return; }
+
+            const totalKeys = keys.length;
+            let keyAssignIdx = currentProvider === 'cartesia' ? cartesiaCurrentKeyIdx : elevenLabsCurrentKeyIdx;
+
+            const promises = tasks.map((idx, taskListIdx) => {
+                const assignedKeyIdx = (keyAssignIdx + taskListIdx) % totalKeys;
+                return processSingleSegment(idx, assignedKeyIdx, abortController.signal);
+            });
+
+            try { await Promise.all(promises); } catch(e) {}
+            
+            isProcessing = false;
+            const hasErrors = segments.some(s => s.status === 'error');
+            const hasPending = segments.some(s => s.status === 'pending');
+            
+            if (!hasErrors && !hasPending) {
+                toast("All audio files generated successfully.", "success");
+                document.getElementById('live-tracker-list').innerHTML = '<div class="text-emerald-400 font-bold text-center py-2 text-[10px]">&gt; All audio generation complete! ✔</div>';
+            }
+            else if (hasErrors) toast("Failed to generate some segments.", "error");
+            
+            renderSegments();
+        };
+
+        // --- Cartesia TTS Logic ---
+        async function fetchCartesiaTTS(text, key, signal) {
+            const voiceUid = document.getElementById('voice-id-input').value;
+            const targetVoice = cartesiaVoices.find(v => v.uid === voiceUid);
+            const voiceId = targetVoice ? targetVoice.id : (cartesiaVoices[0] ? cartesiaVoices[0].id : null);
+
+            const speed = document.getElementById('speed-select').value;
+            let speedMap = { "normal": "normal", "slow": "slowest", "fast": "fastest" };
+            const emotionMap = { "Neutral": ["positivity:low"], "Happy": ["positivity:high", "curiosity:high"], "Serious": ["positivity:low", "surprise:low"], "Calm": ["positivity:low", "surprise:low"], "Energetic": ["positivity:high", "surprise:high"], "Whispering": [] };
+
+            const payload = {
+                model_id: "sonic-3.5", transcript: text,
+                voice: { mode: "id", id: voiceId, __experimental_controls: { speed: speedMap[speed] || "normal", emotion: emotionMap[selectedEmotion] || ["positivity:low"] } },
+                output_format: { container: "raw", encoding: "pcm_s16le", sample_rate: 44100 }
+            };
+            const res = await fetch("https://api.cartesia.ai/tts/bytes", {
+                method: "POST", headers: { "Cartesia-Version": "2024-06-10", "X-API-Key": key, "Content-Type": "application/json" },
+                body: JSON.stringify(payload), signal
+            });
+            if (!res.ok) throw new Error("Cartesia API Limit or Error");
+            const buffer = await res.arrayBuffer();
+            return { pcm: new Int16Array(buffer), rate: 44100 };
+        }
+
+        // --- ElevenLabs TTS Logic ---
+        async function fetchElevenLabsTTS(text, key, signal) {
+            const voiceUid = document.getElementById('voice-id-input').value;
+            const targetVoice = elevenLabsVoices.find(v => v.uid === voiceUid);
+            const voiceId = targetVoice ? targetVoice.id : (elevenLabsVoices[0] ? elevenLabsVoices[0].id : "pNInz6obpgDQGcFmaJgB");
+
+            const payload = {
+                text: text,
+                model_id: "eleven_v3",
+                voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+            };
+
+            const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+                method: "POST",
+                headers: {
+                    "xi-api-key": key,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload),
+                signal
+            });
+            
+            if (!response.ok) {
+                let errStr = response.statusText;
+                try {
+                    const errorData = await response.json();
+                    errStr = errorData.detail?.status || errorData.detail?.message || errStr;
+                } catch(e) {}
+                throw new Error(errStr);
+            }
+            const blob = await response.blob();
+            return { blob };
+        }
+
+        function pcmToWav(pcm, rate) {
+            const buffer = new ArrayBuffer(44 + pcm.length * 2);
+            const view = new DataView(buffer);
+            const writeStr = (off, s) => { for (let i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); };
+            writeStr(0, 'RIFF'); view.setUint32(4, 36 + pcm.length * 2, true);
+            writeStr(8, 'WAVEfmt '); view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+            view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true);
+            view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+            writeStr(36, 'data'); view.setUint32(40, pcm.length * 2, true);
+            for (let i = 0; i < pcm.length; i++) view.setInt16(44 + i * 2, pcm[i], true);
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        window.downloadZip = async function() {
+            const zip = new JSZip();
+            const ext = currentProvider === 'cartesia' ? 'wav' : 'mp3';
+            segments.forEach((s, i) => { if(s.blob) zip.file(`motion_part_${i+1}.${ext}`, s.blob); });
+            const content = await zip.generateAsync({ type: "blob" });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content); link.download = `MotionTTS_Package.zip`; link.click();
+        };
+
+        window.mergeAudio = function() {
+            if (currentProvider === 'cartesia') {
+                const valid = segments.filter(s => s.pcm);
+                if (!valid.length) return;
+                const rate = valid[0].rate;
+                const total = valid.reduce((acc, s) => acc + s.pcm.length, 0);
+                const merged = new Int16Array(total);
+                let offset = 0;
+                valid.forEach(s => { merged.set(s.pcm, offset); offset += s.pcm.length; });
+                const blob = pcmToWav(merged, rate);
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob); link.download = "MotionTTS_Full_Audio.wav"; link.click();
+            } else {
+                const valid = segments.filter(s => s.blob);
+                if (!valid.length) return;
+                const blobs = valid.map(s => s.blob);
+                const finalBlob = new Blob(blobs, { type: 'audio/mpeg' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(finalBlob); link.download = "MotionTTS_Full_Audio.mp3"; link.click();
+            }
+        };
+
+        window.onload = window.initApp;
+    </script>
+</body>
+</html>
+
